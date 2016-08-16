@@ -1,0 +1,240 @@
+<html>
+<head>
+    <title>Node GC viewer</title>
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        $(document).ready(function () {
+            Highcharts.setOptions({
+                global: {
+                    useUTC: false
+                }
+            });
+        });
+
+        var charts = {},
+            chartNo = 1,
+            chartRange = 60000; // 60 seconds
+
+        function convertTime (time) {
+            var rest = time;
+            var hours = Math.floor(rest / 3600000);
+            rest -= hours * 3600000;
+            hours = hours.toString();
+            if (hours.length == 1) hours = '0' + hours;
+            var minutes = Math.floor(rest / 60000);
+            rest -= minutes * 60000;
+            minutes = minutes.toString();
+            if (minutes.length == 1) minutes = '0' + minutes;
+            var seconds = Math.floor(rest / 1000);
+            var ms = ((rest - (seconds * 1000)) / 1000).toString().replace(/^0\./, '');
+            seconds = seconds.toString();
+            if (seconds.length == 1) seconds = '0' + seconds;
+
+            return hours + ':' + minutes + ':' + seconds + '.' + ms
+        }
+
+        function addSpacesChart (socket, id, title) {
+            $('#' + id).highcharts({
+                chart: {
+                    type: 'spline',
+                    animation: Highcharts.svg,
+                    marginRight: 10,
+                    events: {
+                        load: function () {
+                            var seriesUsed = this.series[0];
+                            var seriesAvailable = this.series[1];
+                            var seriesCommitted = this.series[2];
+                            var chart = this;
+
+                            setInterval(function () {
+                                chart.redraw();
+                            }, 1000);
+
+                            socket.on('stats', function (data) {
+                                data.spaces.forEach(function (space) {
+                                    if (space.name == title) {
+                                        var shift = false;
+                                        if (seriesUsed.data.length) {
+                                            shift = seriesUsed.data[seriesUsed.data.length - 1].x - seriesUsed.data[0].x > chartRange;
+                                        }
+
+                                        seriesUsed.addPoint({
+                                            x: data.start,
+                                            y: space.used,
+                                            gc: data.type,
+                                            took: data.took,
+                                            time: data.time,
+                                            marker: {
+                                                symbol: data.nvp.gc == 'ms'? 'square': 'circle'
+                                            }
+                                        }, false, shift);
+
+                                        seriesAvailable.addPoint({
+                                            x: data.start,
+                                            y: space.available,
+                                            gc: data.type,
+                                            took: data.took,
+                                            time: data.time,
+                                            marker: {
+                                                symbol: data.nvp.gc == 'ms'? 'square': 'circle'
+                                            }
+                                        }, false, shift);
+
+                                        seriesCommitted.addPoint({
+                                            x: data.start,
+                                            y: space.committed,
+                                            gc: data.type,
+                                            took: data.took,
+                                            time: data.time,
+                                            marker: {
+                                                symbol: data.nvp.gc == 'ms'? 'square': 'circle'
+                                            }
+                                        }, false, shift);
+                                    }
+                                });
+                            });
+                        }
+                    }
+                },
+                title: {
+                    text: title
+                },
+                xAxis: {
+                    type: 'datetime',
+                    tickPixelInterval: 150
+                },
+                yAxis: {
+                    title: {
+                        text: 'KB'
+                    },
+                    plotLines: [{
+                        value: 0,
+                        width: 1,
+                        color: '#808080'
+                    }]
+                },
+                tooltip: {
+                    formatter: function () {
+                        return '<b>' + this.point.gc + '</b> (took: ' + this.point.took + ' ms)<br/>' +
+                                Highcharts.dateFormat('%Y-%m-%d %H:%M:%S.', this.x) + (this.x % 1000) +
+                                ' (after ' + convertTime(this.point.time) + ')<br/>' +
+                                Highcharts.numberFormat(this.y, 2) + ' KB';
+                    }
+                },
+                legend: {
+                    enabled: true
+                },
+                exporting: {
+                    enabled: false
+                },
+                series: [
+                    {name: 'Used',      data: []},
+                    {name: 'Available', data: []},
+                    {name: 'Committed', data: []}
+                ]
+            });
+        }
+
+        var socket = io.connect('http://<%= domain %>:<%= port %>');
+        if (socket) {
+            console.log('Backend connected');
+            socket.once('stats', function (data) {
+                $('#loader').hide(500);
+                data.spaces.forEach(function (space) {
+                    if (!charts[space.name]) {
+                        console.log('Add chart for ' + space.name);
+                        $('#charts').append('<div class="chart" id="chart' + chartNo + '"></div>');
+                        charts[space.name] = 'chart' + chartNo;
+                        addSpacesChart(socket, charts[space.name], space.name);
+                        ++chartNo;
+                    }
+                });
+            });
+        }
+    </script>
+    <style type="text/css">
+        .chart {height:300px}
+        .loader {
+            margin: 100px auto;
+            font-size: 25px;
+            width: 1em;
+            height: 1em;
+            border-radius: 50%;
+            position: relative;
+            text-indent: -9999em;
+            -webkit-animation: load5 1.1s infinite ease;
+            animation: load5 1.1s infinite ease;
+            -webkit-transform: translateZ(0);
+            -ms-transform: translateZ(0);
+            transform: translateZ(0);
+        }
+        @-webkit-keyframes load5 {
+            0%,
+            100% {
+                box-shadow: 0em -2.6em 0em 0em #c1c1c1, 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.5), -1.8em -1.8em 0 0em rgba(193,193,193, 0.7);
+            }
+            12.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.7), 1.8em -1.8em 0 0em #c1c1c1, 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.5);
+            }
+            25% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.5), 1.8em -1.8em 0 0em rgba(193,193,193, 0.7), 2.5em 0em 0 0em #c1c1c1, 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            37.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.5), 2.5em 0em 0 0em rgba(193,193,193, 0.7), 1.75em 1.75em 0 0em #c1c1c1, 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            50% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.5), 1.75em 1.75em 0 0em rgba(193,193,193, 0.7), 0em 2.5em 0 0em #c1c1c1, -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            62.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.5), 0em 2.5em 0 0em rgba(193,193,193, 0.7), -1.8em 1.8em 0 0em #c1c1c1, -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            75% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.5), -1.8em 1.8em 0 0em rgba(193,193,193, 0.7), -2.6em 0em 0 0em #c1c1c1, -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            87.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.5), -2.6em 0em 0 0em rgba(193,193,193, 0.7), -1.8em -1.8em 0 0em #c1c1c1;
+            }
+        }
+        @keyframes load5 {
+            0%,
+            100% {
+                box-shadow: 0em -2.6em 0em 0em #c1c1c1, 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.5), -1.8em -1.8em 0 0em rgba(193,193,193, 0.7);
+            }
+            12.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.7), 1.8em -1.8em 0 0em #c1c1c1, 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.5);
+            }
+            25% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.5), 1.8em -1.8em 0 0em rgba(193,193,193, 0.7), 2.5em 0em 0 0em #c1c1c1, 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            37.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.5), 2.5em 0em 0 0em rgba(193,193,193, 0.7), 1.75em 1.75em 0 0em #c1c1c1, 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            50% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.5), 1.75em 1.75em 0 0em rgba(193,193,193, 0.7), 0em 2.5em 0 0em #c1c1c1, -1.8em 1.8em 0 0em rgba(193,193,193, 0.2), -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            62.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.5), 0em 2.5em 0 0em rgba(193,193,193, 0.7), -1.8em 1.8em 0 0em #c1c1c1, -2.6em 0em 0 0em rgba(193,193,193, 0.2), -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            75% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.5), -1.8em 1.8em 0 0em rgba(193,193,193, 0.7), -2.6em 0em 0 0em #c1c1c1, -1.8em -1.8em 0 0em rgba(193,193,193, 0.2);
+            }
+            87.5% {
+                box-shadow: 0em -2.6em 0em 0em rgba(193,193,193, 0.2), 1.8em -1.8em 0 0em rgba(193,193,193, 0.2), 2.5em 0em 0 0em rgba(193,193,193, 0.2), 1.75em 1.75em 0 0em rgba(193,193,193, 0.2), 0em 2.5em 0 0em rgba(193,193,193, 0.2), -1.8em 1.8em 0 0em rgba(193,193,193, 0.5), -2.6em 0em 0 0em rgba(193,193,193, 0.7), -1.8em -1.8em 0 0em #c1c1c1;
+            }
+        }
+        #loader {
+            text-align: center;
+            font-family: sans-serif;
+            color: #808080;
+        }
+
+    </style>
+</head>
+<body>
+<div id="loader"><div class="loader"></div><div>Waiting for data ...</div></div>
+<div id="charts"></div>
+</body>
+</html>

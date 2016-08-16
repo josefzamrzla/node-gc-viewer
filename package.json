@@ -1,0 +1,34 @@
+{
+  "name": "node-gc-viewer",
+  "version": "0.0.1",
+  "description": "Node.js V8 garbage collector viewer",
+  "main": "cmd.js",
+  "bin": "./cmd.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/josefzamrzla/node-gc-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/josefzamrzla/node-gc-viewer/issues"
+  },
+  "homepage": "https://github.com/josefzamrzla/node-gc-viewer",
+  "keywords": [
+    "v8",
+    "gc",
+    "trace_gc",
+    "trace_gc_verbose",
+    "trace_gc_nvp"
+  ],
+  "author": "Josef Zamrzla",
+  "license": "MIT",
+  "dependencies": {
+    "ejs": "^2.5.1",
+    "express": "^4.14.0",
+    "gc-log-parser": "^1.1.0",
+    "opn": "^4.0.2",
+    "socket.io": "^1.4.8"
+  }
+}
