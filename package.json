@@ -1,6 +1,6 @@
 {
   "name": "node-gc-viewer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Visualizes the usage of V8 heap spaces after every garbage collector run (both Scavenge and Mark-sweep).",
   "main": "cmd.js",
   "bin": "./cmd.js",
