@@ -11,10 +11,10 @@ Visualizes the usage of V8 heap spaces after every garbage collector run (both S
 ```bash
   node-gc-viewer [node.js options] [ watched script.js ]
 
-  Runs a garbage collector visualizer on localhost:8888 and opens its frontend in your default browser.
+  Runs a garbage collector visualizer on localhost:9999 and opens its frontend in your default browser.
 
   To run backend on different domain or port, use env variables DOMAIN and/or PORT:
-  DOMAIN=custom-domain PORT=8888 node-gc-viewer [node.js options] [ watched script.js ]
+  DOMAIN=custom-domain PORT=9999 node-gc-viewer [node.js options] [ watched script.js ]
 
   To run a coffeescript file, try eg.:
   node-gc-viewer $(which coffee) script.coffee
