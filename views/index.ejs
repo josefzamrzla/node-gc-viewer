@@ -1,6 +1,7 @@
 <html>
 <head>
     <title>Node GC viewer</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous" />
     <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/modules/exporting.js"></script>
@@ -11,6 +12,10 @@
                 global: {
                     useUTC: false
                 }
+            });
+
+            $('#alert-close').click(function () {
+                $('#error-alert').hide();
             });
         });
 
@@ -153,6 +158,10 @@
                     }
                 });
             });
+            socket.once('spawn_error', function (data) {
+                $('#error').html('<strong>Spawn error</strong><br /><pre>' + data.toString() + '</pre>');
+                $('#error-alert').show();
+            });
         }
     </script>
     <style type="text/css">
@@ -234,6 +243,10 @@
     </style>
 </head>
 <body>
+<div id="error-alert" class="alert alert-danger alert-dismissible" role="alert" style="display:none">
+    <button type="button" class="close" data-dismiss="alert" aria-label="Close" id="alert-close"><span aria-hidden="true">&times;</span></button>
+    <div id="error"></div>
+</div>
 <div id="loader"><div class="loader"></div><div>Waiting for data ...</div></div>
 <div id="charts"></div>
 </body>

@@ -9,31 +9,22 @@ var io = require('socket.io')(server);
 
 var parser = new GcLogParser();
 var buffer = [];
+
 parser.on('stats', function (stats) {
 	if (io.sockets.adapter.rooms['all'] && io.sockets.adapter.rooms['all'].length > 0) {
-		if (buffer.length) {
-			buffer.forEach(function (item) {
-				io.in('all').emit('stats', item);
-			});
-			buffer = [];
-		}
 		io.in('all').emit('stats', stats);
 	} else {
 		console.log('no clients, buffering');
-		buffer.push(stats);
+		buffer.push({event: 'stats', data: stats});
 	}
-
-
 });
 
 var args = ['--trace_gc', '--trace_gc_verbose', '--trace_gc_nvp'];
 var cmdArgs = process.argv.slice(2);
 if (!cmdArgs.length) {
-	var version = require('./package.json').version
-	process.stdout.write('node-gc-viewer ' + version + '\n')
-	return require('fs')
-		.createReadStream(__dirname + '/usage.txt')
-		.pipe(process.stdout);
+	var version = require('./package.json').version;
+	process.stdout.write('node-gc-viewer ' + version + '\n');
+	return require('fs').createReadStream(__dirname + '/usage.txt').pipe(process.stdout);
 } else {
 	console.log('Initializing');
 	for (var i = 0; i < cmdArgs.length; i++) {
@@ -44,10 +35,8 @@ if (!cmdArgs.length) {
 
 	var gc = spawn('node', args);
 	gc.stderr.on('data', function (e) {
-		// todo: send error to frontend (via ws)
-		console.log(e.toString());
-		gc.kill();
-		process.exit(0);
+		console.error('Spawn error', e.toString());
+		buffer.push({event: 'spawn_error', data: e.toString()});
 	});
 
 	const readline = require('readline');
@@ -88,10 +77,19 @@ app.get('/favicon.ico', function (req, res) {
 
 setTimeout(function () {
 	server.listen(port, function () {
-		console.log('Starting backend on', port);
+		console.log('Starting backend on port ', port);
 		opn('http://' + domain + ':' + port);
-		console.log('');
+		console.log('Navigate your browser to http://' + domain + ':' + port + ' if it does not start automatically');
 	});
+}, 1000);
+
+setInterval(function () {
+	if (io.sockets.adapter.rooms['all'] && io.sockets.adapter.rooms['all'].length > 0) {
+		while (buffer.length > 0) {
+			var item = buffer.shift();
+			io.in('all').emit(item.event, item.data);
+		}
+	}
 }, 1000);
 
 module.exports = {};
