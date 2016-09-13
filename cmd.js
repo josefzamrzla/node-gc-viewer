@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 "use strict";
-const opn = require('opn');
-const spawn = require('child_process').spawn;
-const GcLogParser = require('gc-log-parser');
+var opn = require('opn');
+var spawn = require('child_process').spawn;
+var GcLogParser = require('gc-log-parser');
+var Tail = require('tail').Tail;
 var app = require('express')();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
+var fs = require('fs'), path = require('path');
+var gcOutPath = path.join(process.cwd(), '.captured.gcout');
+var stdOutPath = path.join(process.cwd(), '.captured.stdout');
 
 var parser = new GcLogParser();
 var buffer = [];
@@ -24,28 +28,55 @@ var cmdArgs = process.argv.slice(2);
 if (!cmdArgs.length) {
 	var version = require('./package.json').version;
 	process.stdout.write('node-gc-viewer ' + version + '\n');
-	return require('fs').createReadStream(__dirname + '/usage.txt').pipe(process.stdout);
+	return fs.createReadStream(path.join(__dirname, 'usage.txt')).pipe(process.stdout);
 } else {
+	try {
+		fs.writeFileSync(gcOutPath, '');
+	} catch (e) {
+		console.log('Cannot create temp file to capture gc output (' + gcOutPath + ')');
+		process.exit();
+	}
+
+	var gcOut = fs.openSync(gcOutPath, 'w');
+	var gcOutWatcher = new Tail(gcOutPath);
+
 	console.log('Initializing');
+	if ((parseInt(process.versions.node, 10) || 0) === 0) {
+		console.log('\nWARNING: you are using Node.js version < 2.0, GC output can be corrupted by standard output\n');
+	} else {
+		try {
+			fs.writeFileSync(stdOutPath, '');
+		} catch (e) {
+			console.log('Cannot create temp file to capture script output (' + stdOutPath + ')');
+			process.exit();
+		}
+
+		var childOut = new Tail(stdOutPath);
+		childOut.on('line', function(line) {
+			console.log(line);
+		});
+
+		args.unshift('-r', path.join(__dirname, 'capture-stdout'));
+	}
+
 	for (var i = 0; i < cmdArgs.length; i++) {
 		if (args.indexOf(cmdArgs[i]) === -1) {
 			args.push(cmdArgs[i]);
 		}
 	}
 
-	var gc = spawn('node', args);
-	gc.stderr.on('data', function (e) {
+	var child = spawn('node', args, {stdio: ['pipe', gcOut, 'pipe']});
+	child.stderr.on('data', function (e) {
 		console.error('Spawn error', e.toString());
 		buffer.push({event: 'spawn_error', data: e.toString()});
 	});
-
-	const readline = require('readline');
-	const rl = readline.createInterface({
-		input: gc.stdout
+	child.on('exit', function (code) {
+		console.error('Child process has died with code:', code);
+		buffer.push({event: 'spawn_error', data: 'Child process has died with code: ' + code});
 	});
 
-	const showGcLog = process.env.SHOW_GC_LOG || false;
-	rl.on('line', function (line) {
+	var showGcLog = process.env.SHOW_GC_LOG || false;
+	gcOutWatcher.on('line', function(line) {
 		if (parser.parse(line)) {
 			if (showGcLog) {
 				console.log(line);

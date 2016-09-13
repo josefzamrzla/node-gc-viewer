@@ -158,8 +158,9 @@
                     }
                 });
             });
-            socket.once('spawn_error', function (data) {
-                $('#error').html('<strong>Spawn error</strong><br /><pre>' + data.toString() + '</pre>');
+            socket.on('spawn_error', function (data) {
+                console.log(data.toString());
+                $('#error-msg').html($('#error-msg').html() + '<pre>' + data.toString() + '</pre>');
                 $('#error-alert').show();
             });
         }
@@ -245,7 +246,7 @@
 <body>
 <div id="error-alert" class="alert alert-danger alert-dismissible" role="alert" style="display:none">
     <button type="button" class="close" data-dismiss="alert" aria-label="Close" id="alert-close"><span aria-hidden="true">&times;</span></button>
-    <div id="error"></div>
+    <div id="error"><strong>Spawn error</strong><br /><span id="error-msg"></span></div>
 </div>
 <div id="loader"><div class="loader"></div><div>Waiting for data ...</div></div>
 <div id="charts"></div>
