@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-var opn = require('opn');
+var open = require('open');
 var spawn = require('child_process').spawn;
 var GcLogParser = require('gc-log-parser');
 var Tail = require('tail').Tail;
@@ -109,7 +109,7 @@ app.get('/favicon.ico', function (req, res) {
 setTimeout(function () {
 	server.listen(port, function () {
 		console.log('Starting backend on port ', port);
-		opn('http://' + domain + ':' + port);
+		open('http://' + domain + ':' + port);
 		console.log('Navigate your browser to http://' + domain + ':' + port + ' if it does not start automatically');
 	});
 }, 1000);
